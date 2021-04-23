@@ -8,6 +8,7 @@ neuron_layer_1 = 47
 neuron_layer_2 = 60
 outputNum = 2
 lines_count_train = 79
+lines_count_test = 10
 
 class NN(object):
     def __init__(self, learning_rate=0.1):
@@ -44,7 +45,10 @@ class NN(object):
                 inputs[i] = 0.0
             else:
                 inputs[i] = arr[i]
-        i = 1
+        if isKGF:
+            i = 1
+        else:
+            i = 0
         inputs_1 = np.dot(self.weights_0_1, inputs)
         outputs_1 = self.sigmoid_mapper(inputs_1)
 
@@ -87,8 +91,8 @@ def mse(y, Y):
     return np.mean((y - Y) ** 2)
 
 
-epochs = 10000
-lr = 0.0005
+epochs = 100
+lr = 0.001
 
 network = NN(learning_rate=lr)
 table = pd.read_csv(r'C:\Users\Ekaterina\PycharmProjects\untitled2\train.csv', sep=";", header=[0], encoding="windows-1251")
@@ -104,21 +108,90 @@ for i, row in table.iterrows():
 
 
 for e in range(epochs):
-    inputs_ = []
-    correct_predictions = []
-    predictions = []
+    inputs_kgf = []
+    correct_predictions_kgf = []
+    predictions_kgf = []
     for i, row in table.iterrows():
         correct_predict = []
-        correct_predict.append(table.values.tolist()[i][inputNum]) #G_total
-        correct_predict.append(table.values.tolist()[i][inputNum+1])  # КГФ
+        correct_predict.append(table.values.tolist()[i][inputNum])  # G_total
+        correct_predict.append(table.values.tolist()[i][inputNum + 1])  # КГФ
         input_stat = np.array(table.values.tolist()[i])
         network.train(np.array(input_stat), correct_predict)
-        inputs_.append(np.array(input_stat))
-        correct_predictions.append(correct_predict)
+        inputs_kgf.append(np.array(input_stat))
+        correct_predictions_kgf.append(correct_predict)
 
-    for i in range (0, lines_count_train):
-        prediction = network.predict(np.array(inputs_[i]))
-        predictions.append(prediction[1])
-    train_loss = mse(np.array(predictions), np.array(correct_predictions).T[1])
-    #train_loss = mse(network.predict(np.array(inputs_).T), np.array(correct_predictions))
-    sys.stdout.write("\nProgress: {}, Training loss: {}".format(str(100 * e / float(epochs))[:4], str(train_loss)[:5]))
+    for i in range(0, lines_count_train):
+        prediction_kgf = network.predict(np.array(inputs_kgf[i]))
+        predictions_kgf.append(prediction_kgf[1])
+    train_loss_kgf = mse(np.array(predictions_kgf), np.array(correct_predictions_kgf).T[1])
+    # конец КГФ
+
+    predictions_g_total = []
+    correct_predictions_g_total = []
+    inputs_g_total = []
+    for i, row in table.iterrows():
+        correct_predict = []
+        g_total = table.values.tolist()[i][inputNum]    # G_total
+        if g_total is None:
+            continue
+        correct_predict.append(table.values.tolist()[i][inputNum + 1])  # КГФ
+        correct_predict.append(g_total)
+        input_stat = np.array(table.values.tolist()[i])
+        network.train(np.array(input_stat), correct_predict, False)
+        inputs_g_total.append(np.array(input_stat))
+        correct_predictions_g_total.append(correct_predict)
+
+    k = 0
+    for i in range(0, lines_count_train):
+        if table.values.tolist()[i][inputNum] is None:
+            continue
+        prediction_g_total = network.predict(np.array(inputs_g_total[k]))
+        k = k + 1
+        predictions_g_total.append(prediction_g_total[0])
+    train_loss_g_total = mse(np.array(predictions_g_total), np.array(correct_predictions_g_total).T[0])
+    # train_loss = mse(network.predict(np.array(inputs_).T), np.array(correct_predictions))
+    sys.stdout.write(
+        "\nProgress: {}, Training loss KGF: {}, Training loss G_total: {}".format(str(100 * e / float(epochs))[:4], str(train_loss_kgf)[:5], str(train_loss_g_total)[:5]))
+    # конец g_total
+
+# начало проверки на тестовом сете
+test_table = pd.read_csv(r'C:\Users\Ekaterina\PycharmProjects\untitled2\test.csv', sep=";", header=[0],
+                    encoding="windows-1251")
+test_table = test_table.replace(',', '.', regex=True)
+for i, row in test_table.iterrows():
+    for column in test_table.columns:
+        try:
+            test_table.at[i, column] = float(test_table.at[i, column])
+        except ValueError:
+            test_table.at[i, column] = None
+        if math.isnan(test_table.at[i, column]):
+            test_table.at[i, column] = None
+
+correct_predictions = []
+predictions = []
+predict_arr_kgf = []
+correct_arr_kgf = []
+predict_arr_g_total = []
+correct_arr_g_total = []
+for i in range(0, lines_count_test):
+    input = np.array(table.values.tolist()[i])
+    prediction = network.predict(np.array(input))
+    predictions.append(prediction[1])
+    correct_g_total = table.values.tolist()[i][inputNum]  # G_total
+    correct_kgf = table.values.tolist()[i][inputNum + 1]  # КГФ
+    g_total_predict = prediction[0]
+    kgf_predict = prediction[1]
+    sys.stdout.write(
+        "\nTest #{}: Expected KGF: {}, Predicted KGF: {}, Err: {}".format(str(i), str(correct_kgf)[:5], str(kgf_predict)[:5], str(mse(kgf_predict, correct_kgf))))
+    correct_arr_kgf.append(correct_kgf)
+    predict_arr_kgf.append(kgf_predict)
+    if correct_g_total is None:
+        continue
+    else:
+        sys.stdout.write(
+            "\nTest #{}: Expected G_total: {}, Predicted G_total: {}, Err: {}".format(str(i), str(correct_g_total)[:5],
+                                                                     str(g_total_predict)[:5], str(mse(g_total_predict, correct_g_total))))
+    correct_arr_g_total.append(correct_g_total)
+    predict_arr_g_total.append(g_total_predict)
+
+sys.stdout.write("\nKGF err: {}, G_total err: {}".format(str(mse(np.array(correct_arr_kgf), np.array(predict_arr_kgf))), str(mse(np.array(correct_arr_g_total), np.array(predict_arr_g_total)))))
