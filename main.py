@@ -2,6 +2,7 @@ import math
 import sys
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 inputNum = 12
 neuron_layer_1 = 47
@@ -9,7 +10,8 @@ neuron_layer_2 = 60
 outputNum = 2
 lines_count_train = 79
 lines_count_test = 10
-
+# КГФ - 61 класс, g_total - 15
+# КГФ - 10 классов, g_total - 6
 class NN(object):
     def __init__(self, learning_rate=0.1):
         self.weights_0_1 = np.random.normal(0.0, 2 ** -0.5, (neuron_layer_1, inputNum))
@@ -86,6 +88,14 @@ class NN(object):
                 else:
                     self.weights_0_1[k, j] -= (inputs[j] * weights_delta_layer_1[0][k] * self.learning_rate[0])
 
+    def show_weights(self):
+        np.set_printoptions(threshold=sys.maxsize)
+        out = open("out.txt", "w")
+        out.write("\n\nWeights 0-1: {}".format(self.weights_0_1))
+        out.write("\n\nWeights 1-2: {}".format(self.weights_1_2))
+        out.write("\n\nWeights 2-3: {}".format(self.weights_2_3))
+        out.close()
+
 
 def mse(y, Y):
     return np.mean((y - Y) ** 2)
@@ -106,7 +116,8 @@ for i, row in table.iterrows():
         if math.isnan(table.at[i, column]):
             table.at[i, column] = None
 
-
+errs_kgf = []
+errs_g_total = []
 for e in range(epochs):
     inputs_kgf = []
     correct_predictions_kgf = []
@@ -150,6 +161,8 @@ for e in range(epochs):
         predictions_g_total.append(prediction_g_total[0])
     train_loss_g_total = mse(np.array(predictions_g_total), np.array(correct_predictions_g_total).T[0])
     # train_loss = mse(network.predict(np.array(inputs_).T), np.array(correct_predictions))
+    errs_kgf.append(train_loss_kgf/(2*len(predictions_kgf)))
+    errs_g_total.append(train_loss_g_total/(2 * len(predictions_g_total)))
     sys.stdout.write(
         "\nProgress: {}, Training loss KGF: {}, Training loss G_total: {}".format(str(100 * e / float(epochs))[:4], str(train_loss_kgf)[:5], str(train_loss_g_total)[:5]))
     # конец g_total
@@ -173,6 +186,8 @@ predict_arr_kgf = []
 correct_arr_kgf = []
 predict_arr_g_total = []
 correct_arr_g_total = []
+errs_kgf_test = []
+errs_g_total_test = []
 for i in range(0, lines_count_test):
     input = np.array(table.values.tolist()[i])
     prediction = network.predict(np.array(input))
@@ -182,16 +197,49 @@ for i in range(0, lines_count_test):
     g_total_predict = prediction[0]
     kgf_predict = prediction[1]
     sys.stdout.write(
-        "\nTest #{}: Expected KGF: {}, Predicted KGF: {}, Err: {}".format(str(i), str(correct_kgf)[:5], str(kgf_predict)[:5], str(mse(kgf_predict, correct_kgf))))
+        "\nTest #{}: Expected KGF: {}, Predicted KGF: {}, Difference: {}".format(str(i), str(correct_kgf)[:5], str(kgf_predict)[:5], str(kgf_predict - correct_kgf)))
     correct_arr_kgf.append(correct_kgf)
     predict_arr_kgf.append(kgf_predict)
+    err_kgf_test = mse(np.array(predict_arr_kgf), np.array(correct_arr_kgf))
+    errs_kgf_test.append(err_kgf_test / (2 * len(correct_arr_kgf)))
     if correct_g_total is None:
         continue
     else:
         sys.stdout.write(
-            "\nTest #{}: Expected G_total: {}, Predicted G_total: {}, Err: {}".format(str(i), str(correct_g_total)[:5],
-                                                                     str(g_total_predict)[:5], str(mse(g_total_predict, correct_g_total))))
+            "\nTest #{}: Expected G_total: {}, Predicted G_total: {}, Difference: {}".format(str(i), str(correct_g_total)[:5],
+                                                                     str(g_total_predict)[:5], str(g_total_predict - correct_g_total)))
     correct_arr_g_total.append(correct_g_total)
     predict_arr_g_total.append(g_total_predict)
+    err_g_total_test = mse(np.array(predict_arr_g_total), np.array(correct_arr_g_total))
+    errs_g_total_test.append(err_g_total_test / (2 * len(correct_arr_g_total)))
 
 sys.stdout.write("\nKGF err: {}, G_total err: {}".format(str(mse(np.array(correct_arr_kgf), np.array(predict_arr_kgf))), str(mse(np.array(correct_arr_g_total), np.array(predict_arr_g_total)))))
+
+x = np.arange(0, epochs)
+y1 = [i for i in errs_kgf]
+y2 = [i for i in errs_g_total]
+x1 = np.arange(0, 10)
+y11 = [i for i in errs_kgf_test]
+x2 = np.arange(0, len(errs_g_total_test))
+y22 = [i for i in errs_g_total_test]
+plt.subplot(3, 1, 1)
+plt.title("Стоимость")
+plt.xlabel("epochs")
+plt.ylabel("kgf, g_total err")
+plt.plot(x, y1, label='КГФ')
+plt.plot(x, y2, label='g_total')
+plt.legend()
+plt.subplot(3, 1, 2)
+plt.plot(x1, y11)
+plt.title("Стоимость(test), КГФ")
+plt.ylabel("КГФ_err")
+plt.xlabel("Тест №")
+plt.grid()
+plt.subplot(3, 1, 3)
+plt.plot(x2, y22)
+plt.title("Стоимость(test), g_total")
+plt.ylabel("g_total_err")
+plt.xlabel("Тест №")
+plt.grid()
+plt.show()
+network.show_weights()
